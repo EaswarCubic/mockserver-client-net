@@ -26,20 +26,21 @@ namespace MockServerClientNet
         private const string RetrieveEndpoint = "/retrieve";
 
         private const int DefaultPriority = 0;
+        private readonly string _contextPath;
 
         private readonly JsonSerializer<Expectation> _expectationSerializer = new JsonSerializer<Expectation>();
+
+        private readonly string _host;
+        private readonly HttpClient _httpClient;
         private readonly JsonSerializer<HttpRequest> _httpRequestSerializer = new JsonSerializer<HttpRequest>();
+        private readonly HttpScheme _httpScheme;
+        private readonly string _mockserviceEndpoint;
+        private readonly int _port;
 
         private readonly JsonSerializer<VerificationSequence> _verificationSequenceSerializer =
             new JsonSerializer<VerificationSequence>();
 
         private readonly JsonSerializer<Verification> _verificationSerializer = new JsonSerializer<Verification>();
-
-        private readonly string _host;
-        private readonly int _port;
-        private readonly string _contextPath;
-        private readonly HttpScheme _httpScheme;
-        private readonly HttpClient _httpClient;
 
         public MockServerClient(string host, int port, string contextPath = "",
             HttpScheme httpScheme = HttpScheme.Http, HttpClientHandler httpHandler = null)
@@ -51,40 +52,41 @@ namespace MockServerClientNet
             _httpClient = new HttpClient(httpHandler ?? new HttpClientHandler());
         }
 
+        public MockServerClient(string host, string mockserviceEndpoint, string contextPath = "",
+            HttpScheme httpScheme = HttpScheme.Http, HttpClientHandler httpHandler = null)
+        {
+            _host = host;
+            _mockserviceEndpoint = mockserviceEndpoint;
+            _contextPath = contextPath;
+            _httpScheme = httpScheme;
+            _httpClient = new HttpClient(httpHandler ?? new HttpClientHandler());
+        }
+
         public void Dispose()
         {
             _httpClient.Dispose();
         }
 
-        public Uri ServerAddress(string path = "")
-        {
-            return new Uri($"{_httpScheme.Value()}://{_host}:{_port}{path.PrefixWith("/")}");
-        }
+        public Uri ServerAddress(string path = "") =>
+            string.IsNullOrEmpty(_mockserviceEndpoint)
+                ? new Uri($"{_httpScheme.Value()}://{_host}:{_port}{path.PrefixWith("/")}")
+                : new Uri($"{_httpScheme.Value()}://{_host}/{_mockserviceEndpoint}{path.PrefixWith("/")}");
 
         public ForwardChainExpectation When(
-            HttpRequest httpRequest, int priority = DefaultPriority)
-        {
-            return When(httpRequest, Times.Unlimited(), TimeToLive.Unlimited(), priority);
-        }
+            HttpRequest httpRequest, int priority = DefaultPriority) =>
+            When(httpRequest, Times.Unlimited(), TimeToLive.Unlimited(), priority);
 
         public ForwardChainExpectation When(
-            HttpRequest httpRequest, Times times, int priority = DefaultPriority)
-        {
-            return When(httpRequest, times, TimeToLive.Unlimited(), priority);
-        }
+            HttpRequest httpRequest, Times times, int priority = DefaultPriority) =>
+            When(httpRequest, times, TimeToLive.Unlimited(), priority);
 
         public ForwardChainExpectation When(
-            HttpRequest httpRequest, Times times, TimeToLive timeToLive, int priority = DefaultPriority)
-        {
-            return new ForwardChainExpectation(
+            HttpRequest httpRequest, Times times, TimeToLive timeToLive, int priority = DefaultPriority) =>
+            new ForwardChainExpectation(
                 this,
                 new Expectation(httpRequest, times, timeToLive, priority));
-        }
 
-        public MockServerClient Clear(HttpRequest httpRequest)
-        {
-            return ClearAsync(httpRequest).AwaitResult();
-        }
+        public MockServerClient Clear(HttpRequest httpRequest) => ClearAsync(httpRequest).AwaitResult();
 
         public async Task<MockServerClient> ClearAsync(HttpRequest httpRequest)
         {
@@ -95,10 +97,7 @@ namespace MockServerClientNet
             return this;
         }
 
-        public MockServerClient Verify(params HttpRequest[] httpRequests)
-        {
-            return VerifyAsync(httpRequests).AwaitResult();
-        }
+        public MockServerClient Verify(params HttpRequest[] httpRequests) => VerifyAsync(httpRequests).AwaitResult();
 
         public async Task<MockServerClient> VerifyAsync(params HttpRequest[] httpRequests)
         {
@@ -123,10 +122,7 @@ namespace MockServerClientNet
             return this;
         }
 
-        public MockServerClient Verify(HttpRequest httpRequest, VerificationTimes times)
-        {
-            return VerifyAsync(httpRequest, times).AwaitResult();
-        }
+        public MockServerClient Verify(HttpRequest httpRequest, VerificationTimes times) => VerifyAsync(httpRequest, times).AwaitResult();
 
         public async Task<MockServerClient> VerifyAsync(HttpRequest httpRequest, VerificationTimes times)
         {
@@ -157,20 +153,11 @@ namespace MockServerClientNet
             return this;
         }
 
-        public MockServerClient VerifyZeroInteractions()
-        {
-            return VerifyZeroInteractionsAsync().AwaitResult();
-        }
+        public MockServerClient VerifyZeroInteractions() => VerifyZeroInteractionsAsync().AwaitResult();
 
-        public async Task<MockServerClient> VerifyZeroInteractionsAsync()
-        {
-            return await VerifyAsync(new HttpRequest(), VerificationTimes.Exactly(0));
-        }
+        public async Task<MockServerClient> VerifyZeroInteractionsAsync() => await VerifyAsync(new HttpRequest(), VerificationTimes.Exactly(0));
 
-        public HttpRequest[] RetrieveRecordedRequests(HttpRequest httpRequest)
-        {
-            return RetrieveRecordedRequestsAsync(httpRequest).AwaitResult();
-        }
+        public HttpRequest[] RetrieveRecordedRequests(HttpRequest httpRequest) => RetrieveRecordedRequestsAsync(httpRequest).AwaitResult();
 
         public async Task<HttpRequest[]> RetrieveRecordedRequestsAsync(HttpRequest httpRequest)
         {
@@ -190,10 +177,10 @@ namespace MockServerClientNet
             var expectationBody = expectation != null ? _expectationSerializer.Serialize(expectation) : string.Empty;
 
             using (var response = await SendRequestAsync(
-                new HttpRequestMessage()
-                    .WithMethod(HttpMethod.Put)
-                    .WithUri(ServerAddress(FullPath(ExpectationEndpoint)))
-                    .WithBody(expectationBody)))
+                       new HttpRequestMessage()
+                           .WithMethod(HttpMethod.Put)
+                           .WithUri(ServerAddress(FullPath(ExpectationEndpoint)))
+                           .WithBody(expectationBody)))
             {
                 if (response?.StatusCode != HttpStatusCode.Created)
                 {
@@ -202,10 +189,7 @@ namespace MockServerClientNet
             }
         }
 
-        public MockServerClient Reset()
-        {
-            return ResetAsync().AwaitResult();
-        }
+        public MockServerClient Reset() => ResetAsync().AwaitResult();
 
         public async Task<MockServerClient> ResetAsync()
         {
@@ -215,10 +199,7 @@ namespace MockServerClientNet
             return this;
         }
 
-        public MockServerClient Stop(bool ignoreFailure = false)
-        {
-            return StopAsync(ignoreFailure).AwaitResult();
-        }
+        public MockServerClient Stop(bool ignoreFailure = false) => StopAsync(ignoreFailure).AwaitResult();
 
         public async Task<MockServerClient> StopAsync(bool ignoreFailure = false)
         {
@@ -229,12 +210,10 @@ namespace MockServerClientNet
                     .WithUri(ServerAddress(FullPath(StopEndpoint))));
 
                 foreach (var unused in Enumerable.Range(0, 50))
-                {
                     if (await IsRunningAsync())
                     {
                         Thread.Sleep(5000);
                     }
-                }
             }
             catch (Exception e)
             {
@@ -247,10 +226,7 @@ namespace MockServerClientNet
             return this;
         }
 
-        public bool IsRunning(int attempts = 10, int timeoutMillis = 500)
-        {
-            return IsRunningAsync(attempts, timeoutMillis).AwaitResult();
-        }
+        public bool IsRunning(int attempts = 10, int timeoutMillis = 500) => IsRunningAsync(attempts, timeoutMillis).AwaitResult();
 
         public async Task<bool> IsRunningAsync(int attempts = 10, int timeoutMillis = 500)
         {
@@ -281,8 +257,7 @@ namespace MockServerClientNet
 
         private async Task<HttpResponseMessage> SendRequestAsync(HttpRequestMessage httpRequest)
         {
-            var response = await _httpClient.SendAsync(
-                httpRequest.WithHeader(HttpRequestHeader.Host.ToString(), $"{_host}:{_port}"));
+            var response = await _httpClient.SendAsync(httpRequest);
 
             if (response?.StatusCode == HttpStatusCode.BadRequest)
             {
@@ -292,14 +267,12 @@ namespace MockServerClientNet
             return response;
         }
 
-        private string FullPath(string endpoint)
-        {
-            return endpoint
+        private string FullPath(string endpoint) =>
+            endpoint
                 .PrefixWith("/")
                 .PrefixWith(MockServerBasePath)
                 .PrefixWith("/")
                 .PrefixWith(_contextPath)
                 .PrefixWith("/");
-        }
     }
 }
